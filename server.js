@@ -1,32 +1,34 @@
- // server.js
-const express = require('express');
+ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
+const authRoutes = require("./routes/auth");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// middleware
 app.use(cors());
 app.use(express.json());
+app.use("/api/auth", authRoutes);
 
-// Routes
-const customerRoutes = require('./routes/customers');
-const riderRoutes = require('./routes/riders');
-const businessRoutes = require('./routes/businesses');
+// routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/customers', require('./routes/customers'));
+app.use('/api/riders', require('./routes/riders'));
+app.use('/api/businesses', require('./routes/businesses'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/orders', require('./routes/orders'));
 
-app.use('/api/customers', customerRoutes);
-app.use('/api/riders', riderRoutes);
-app.use('/api/businesses', businessRoutes);
-
-// Connect to MongoDB (Mongoose v7+)
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ MongoDB connected'))
-    .catch(err => console.log('❌ MongoDB connection error:', err));
-
-// Test route
+// test route
 app.get('/', (req, res) => res.send('Server is running'));
 
-// Start server
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+// DB
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.log(err));
+
+// start
+app.listen(PORT, () => {
+  console.log("Server running on", PORT);
+});
