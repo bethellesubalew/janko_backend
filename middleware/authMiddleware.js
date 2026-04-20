@@ -1,4 +1,5 @@
  const jwt = require("jsonwebtoken");
+ const authMiddleware = require('../middleware/authMiddleware');
 
 module.exports = function (req, res, next) {
   try {
@@ -23,8 +24,10 @@ module.exports = function (req, res, next) {
     );
 
     // attach user info
-    req.user = decoded;
-
+    req.user = {
+  id: decoded.id || decoded.userId || decoded._id,
+  role: decoded.role
+};
     next();
 
   } catch (err) {

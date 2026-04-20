@@ -4,19 +4,33 @@ const router = express.Router();
 const Order = require("../models/Order");
 const authMiddleware = require("../middleware/authMiddleware");
 
-
+const requireRole = require("../middleware/roleMiddleware");
 // ==========================
 // CREATE ORDER (CUSTOMER)
 // ==========================
-router.post("/create", authMiddleware, async (req, res) => {
+router.post("/create", authMiddleware,requireRole("customer"), async (req, res) => {
   try {
-    const newOrder = new Order({
-      ...req.body,
+    const lastOrder = await Order.findOne({
       customerId: req.user.id,
-      status: "pending",
-      riderId: null,
-    });
+    }).sort({ createdAt: -1 });
 
+    if (lastOrder) {
+      const timeDiff = Date.now() - new Date(lastOrder.createdAt).getTime();
+
+      if (timeDiff < 5000) {
+        return res.status(429).json({
+          message: "Too many requests - slow down"
+        });
+      }
+    }
+     const newOrder = new Order({
+  customerId: req.user.id,
+  businessId: req.body.businessId,
+  products: req.body.products,
+  totalPrice: req.body.totalPrice,
+  status: "pending",
+  riderId: null,
+});
     await newOrder.save();
 
     res.status(201).json({
@@ -29,37 +43,38 @@ router.post("/create", authMiddleware, async (req, res) => {
   }
 });
 
-
+ // ==========================
+// BUSINESS: GET ALL ORDERS
 // ==========================
-// GET CUSTOMER ORDERS
-// ==========================
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/business/all" , async (req, res) => {
   try {
-    const orders = await Order.find({ customerId: req.user.id });
+    const orders = await Order.find().sort({ createdAt: -1 });
     res.json(orders);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-
 // ==========================
 // ASSIGN RIDER (ADMIN/BUSINESS)
 // ==========================
-router.patch("/assign-rider", authMiddleware, async (req, res) => {
+ router.patch("/assign-rider", async (req, res) => {
   try {
     const { orderId, riderId } = req.body;
 
     const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
 
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+     order.status = "ready_for_delivery";
     order.riderId = riderId;
-    order.status = "accepted";
 
     await order.save();
 
     res.json({
-      message: "Rider assigned successfully",
+      message: "ready_for_delivery",
       order,
     });
 
@@ -68,19 +83,8 @@ router.patch("/assign-rider", authMiddleware, async (req, res) => {
   }
 });
 
+ 
 
-// ==========================
-// RIDER: GET MY ORDERS
-// ==========================
-router.get("/rider", authMiddleware, async (req, res) => {
-  try {
-    const orders = await Order.find({ riderId: req.user.id });
-    res.json(orders);
-
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
 
 // ==========================
@@ -136,7 +140,7 @@ router.patch("/rider/picked", authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-
+ 
 
 // ==========================
 // RIDER MARK DELIVERED
@@ -165,6 +169,46 @@ router.patch("/rider/delivered", authMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+ 
+ // ==========================
+// GET CUSTOMER ORDERS (AUTH)
+// ==========================
+ router.get("/customer", authMiddleware,requireRole("customer"), async (req, res) => {
+  try {
+    console.log("🔥 FULL USER OBJECT:", req.user);
 
+    const orders = await Order.find({
+      customerId: req.user.id,
+    });
 
+    console.log("🔥 FOUND ORDERS:", orders.length);
+
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ==========================
+// RIDER: GET MY ORDERS
+// ==========================
+ 
+
+router.get("/rider/orders", authMiddleware, async (req, res) => {
+  try {
+    console.log("🔥 RIDER REQUEST:", req.user);
+
+ const orders = await Order.find({
+  riderId: null,
+  status: "accepted"
+});
+
+    console.log("🔥 FOUND RIDER ORDERS:", orders.length);
+
+    res.json(orders);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+// ⛔ MUST STAY LAST
 module.exports = router;
